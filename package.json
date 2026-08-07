@@ -1,0 +1,39 @@
+{
+  "name": "pluslife-analyzer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "macOS app for the Pluslife molecular test system. Wraps the virus.sucks web app in an Electron shell that keeps the Mac awake (caffeinate), auto-reconnects to the last Bluetooth device, remembers the last test type, and launches in one click.",
+  "main": "src/main.js",
+  "author": "Jason R. Coombs <jaraco@jaraco.com>",
+  "license": "MIT",
+  "scripts": {
+    "patch-dev-plist": "bash scripts/patch-dev-plist.sh",
+    "start": "bash scripts/run.sh",
+    "debug": "bash scripts/run.sh --pluslife-debug",
+    "start:ui": "PLUSLIFE_NO_CONNECT=1 electron .",
+    "dist": "electron-builder --mac"
+  },
+  "build": {
+    "appId": "com.jaraco.pluslife-analyzer",
+    "productName": "Pluslife Analyzer",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "mac": {
+      "category": "public.app-category.medical",
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "extendInfo": {
+        "NSBluetoothAlwaysUsageDescription": "Pluslife Analyzer connects to your Pluslife test dock over Bluetooth to run tests.",
+        "NSBluetoothPeripheralUsageDescription": "Pluslife Analyzer connects to your Pluslife test dock over Bluetooth to run tests."
+      }
+    }
+  },
+  "devDependencies": {
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3"
+  }
+}
