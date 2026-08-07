@@ -24,6 +24,7 @@
     lastConnectClick: 0,
     connectCooldownMs: 8000,
     dumped: false,
+    savedThisTest: false,
   };
 
   // Load persisted config once (async; fine if the first few ticks miss it).
@@ -180,12 +181,51 @@
     }
   }
 
+  // When a test completes, the results screen shows an "Export raw data as JSON"
+  // button (expert mode, enabled by preload). "JSON" is in that label in every
+  // locale, so it's a reliable, language-independent completion signal. On first
+  // sight we snapshot the page (via main) and click it to export the results.
+  function exportButton() {
+    return deepQueryAll('sl-button').find((b) => /json/i.test(btnText(b))) || null;
+  }
+  function deviceSerial() {
+    const badge = deepQueryAll('sl-badge, span, div').find((el) =>
+      /S\/N[:\s]/i.test((el.textContent || '').trim()),
+    );
+    if (!badge) return null;
+    const m = (badge.textContent || '').match(/S\/N[:\s]*([\w-]+)/i);
+    return m ? m[1] : null;
+  }
+
+  function saveOnComplete() {
+    const btn = exportButton();
+    if (!btn) {
+      state.savedThisTest = false; // left the results screen; arm for next test
+      return;
+    }
+    if (state.savedThisTest) return;
+    state.savedThisTest = true; // set before await so we fire exactly once
+
+    const meta = { serial: deviceSerial(), testType: state.cfg.lastTestName || null };
+    log('test complete, saving artifacts', JSON.stringify(meta));
+    const done = window.plBridge
+      ? window.plBridge.testComplete(meta) // main captures the screenshot first
+      : Promise.resolve();
+    done
+      .then(() => {
+        const b = exportButton(); // re-query in case Lit re-rendered
+        if (b) clickEl(b); // triggers the JSON download → saved by main
+      })
+      .catch((err) => log('save-on-complete failed', err && err.message));
+  }
+
   function tick() {
     try {
       acceptDisclaimer();
       connectIfIdle();
       reconnectWatchdog();
       restoreTestType();
+      saveOnComplete();
     } catch (err) {
       log('tick error', err && err.message);
     }

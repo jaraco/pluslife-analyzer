@@ -1,6 +1,15 @@
 'use strict';
 
-const { app, BrowserWindow, session, ipcMain, powerSaveBlocker } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  session,
+  ipcMain,
+  powerSaveBlocker,
+  dialog,
+  Menu,
+  shell,
+} = require('electron');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -15,6 +24,10 @@ const DEBUG = !!process.env.PLUSLIFE_DEBUG || process.argv.includes('--pluslife-
 // Skip the auto-connect click (useful for pure UI work in a plain terminal run,
 // where touching Bluetooth would crash unless launched via `open`).
 const NO_CONNECT = !!process.env.PLUSLIFE_NO_CONNECT || process.argv.includes('--no-connect');
+// Expert mode unlocks the app's "Export raw data as JSON" control, which we use
+// to auto-export results on completion. On unless explicitly disabled.
+const EXPERT =
+  process.env.PLUSLIFE_EXPERT !== '0' && !process.argv.includes('--no-expert');
 
 let logFile = null; // set once app paths are available
 function dlog(...args) {
@@ -222,6 +235,112 @@ ipcMain.handle('pluslife:setConfig', (_e, patch) => {
 });
 
 // ---------------------------------------------------------------------------
+// Auto-save on test completion: a screenshot of the results page plus the app's
+// own JSON export, both written to the download folder (default ~/Downloads,
+// overridable via the app menu, config.downloadDir, or PLUSLIFE_DOWNLOAD_DIR).
+// ---------------------------------------------------------------------------
+let lastMeta = {}; // { serial, testType } from the most recent completion
+
+function downloadDir() {
+  const dir = process.env.PLUSLIFE_DOWNLOAD_DIR || config.downloadDir || app.getPath('downloads');
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch {
+    /* fall through; the write will surface any real error */
+  }
+  return dir;
+}
+
+function stamp() {
+  // Filename-safe local timestamp: 2026-08-07_141530
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}` +
+    `_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`
+  );
+}
+
+function baseName(meta) {
+  const parts = ['pluslife'];
+  if (meta.testType) parts.push(String(meta.testType).replace(/[^\w.-]+/g, '-'));
+  if (meta.serial) parts.push(String(meta.serial).replace(/[^\w.-]+/g, '-'));
+  parts.push(stamp());
+  return parts.join('-');
+}
+
+// Route the app's JSON download (an <a download> click) straight to disk, no
+// Save dialog. The only downloads this app produces are result exports.
+function wireDownloads(ses) {
+  ses.on('will-download', (_event, item) => {
+    const target = path.join(downloadDir(), `${baseName(lastMeta)}.json`);
+    item.setSavePath(target);
+    item.once('done', (_e, state) => {
+      dlog(state === 'completed' ? `saved JSON: ${target}` : `JSON download ${state}`);
+    });
+  });
+}
+
+async function captureScreenshot(meta) {
+  if (!win || win.isDestroyed()) return;
+  const target = path.join(downloadDir(), `${baseName(meta)}.png`);
+  try {
+    const image = await win.webContents.capturePage();
+    await fs.promises.writeFile(target, image.toPNG());
+    dlog(`saved screenshot: ${target}`);
+  } catch (err) {
+    dlog('screenshot failed:', err && err.message);
+  }
+}
+
+// The renderer signals completion; we snapshot the page here, then it clicks the
+// app's JSON export (caught by will-download above).
+ipcMain.handle('pluslife:testComplete', async (_e, meta) => {
+  lastMeta = meta || {};
+  dlog(`test complete: ${JSON.stringify(lastMeta)}`);
+  await captureScreenshot(lastMeta);
+  return true;
+});
+
+// ---------------------------------------------------------------------------
+// Application menu: let the user change where artifacts are saved.
+// ---------------------------------------------------------------------------
+async function chooseDownloadFolder() {
+  const res = await dialog.showOpenDialog(win, {
+    title: 'Choose download folder for test results',
+    defaultPath: downloadDir(),
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (!res.canceled && res.filePaths[0]) {
+    config.downloadDir = res.filePaths[0];
+    saveConfig(config);
+    dlog(`download folder set to ${config.downloadDir}`);
+  }
+}
+
+function buildMenu() {
+  const template = [
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
+    {
+      label: 'File',
+      submenu: [
+        { label: 'Set Download Folder…', click: chooseDownloadFolder },
+        {
+          label: 'Open Download Folder',
+          click: () => shell.openPath(downloadDir()),
+        },
+        { type: 'separator' },
+        process.platform === 'darwin' ? { role: 'close' } : { role: 'quit' },
+      ],
+    },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// ---------------------------------------------------------------------------
 // App lifecycle.
 // ---------------------------------------------------------------------------
 function createWindow() {
@@ -233,10 +352,14 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Preload reads this to enable the app's expert mode (for JSON export)
+      // before the page's scripts run.
+      additionalArguments: EXPERT ? ['--pluslife-expert'] : [],
     },
   });
 
   wireBluetooth(win.webContents);
+  wireDownloads(win.webContents.session);
 
   if (DEBUG) {
     win.webContents.on('console-message', (_e, _level, message) => {
@@ -265,7 +388,8 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     logFile = path.join(app.getPath('userData'), 'pluslife-debug.log');
     config = loadConfig();
-    dlog(`starting: url=${APP_URL} debug=${DEBUG} noConnect=${NO_CONNECT}`);
+    dlog(`starting: url=${APP_URL} debug=${DEBUG} noConnect=${NO_CONNECT} expert=${EXPERT}`);
+    buildMenu();
     startCaffeinate();
     createWindow();
 

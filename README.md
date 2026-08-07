@@ -7,8 +7,9 @@ molecular tests, built to fix four annoyances with using the web app in Chrome:
 | --- | --- |
 | Mac sleeps mid-test → connection drops, data lost | Holds a native `caffeinate -i` idle-sleep assertion for the whole session (a web page can only hold a Screen Wake Lock, which is released the moment the tab is backgrounded — that's why tests were lost) |
 | Must re-select the Bluetooth device every launch | Intercepts Chromium's device chooser and auto-selects the remembered dock |
-| Must re-select the test type every run | Remembers and re-applies your last test type *(scaffolded — see Status)* |
+| Must re-select the test type every run | Remembers and re-applies your last test kit |
 | Open Chrome → pick profile → load site | It's a normal `.app` with a dock icon |
+| Results not captured anywhere by default | On completion, auto-saves a screenshot **and** the JSON export to `~/Downloads` |
 
 It is a thin Electron shell around the community-maintained
 [virus.sucks Pluslife Analyzer](https://virus.sucks/pluslife_app/). We deliberately
@@ -68,17 +69,38 @@ needs right-click → Open, or an ad-hoc/Developer-ID signature.)
 - **`src/preload.js`** — exposes a tiny `window.plBridge` (get/set config) over
   IPC; no Node access is given to the remote page.
 - **`src/automation.js`** — injected into the app's shadow-DOM UI: accepts the
-  disclaimer, clicks *Connect via Bluetooth*, restores the last test type, and
-  re-clicks *Reconnect* when the (hardware-flaky) Bluetooth link drops.
+  disclaimer, clicks *Connect via Bluetooth*, restores the last test kit,
+  re-clicks *Reconnect* when the (hardware-flaky) Bluetooth link drops, and
+  triggers the save-on-completion flow.
 
 Config persists at
 `~/Library/Application Support/pluslife-analyzer/config.json`.
+
+## Saving results
+
+When a test completes, the app automatically writes two files to your download
+folder (default `~/Downloads`):
+
+- `pluslife-<kit>-<serial>-<timestamp>.png` — a screenshot of the results page
+  (via Electron `capturePage()`).
+- `pluslife-<kit>-<serial>-<timestamp>.json` — the app's own *Export raw data as
+  JSON*. This lives behind the app's **expert mode**, which the wrapper enables
+  automatically (disable with `PLUSLIFE_EXPERT=0` / `--no-expert`).
+
+**Change the folder** any of three ways (first match wins):
+
+1. `PLUSLIFE_DOWNLOAD_DIR` environment variable.
+2. **File → Set Download Folder…** in the menu (native folder picker; persists to
+   `config.json`). **File → Open Download Folder** reveals it.
+3. Otherwise `~/Downloads`.
 
 ### Configuration (env vars)
 
 - `PLUSLIFE_URL` — override the app URL (e.g. a pinned local copy).
 - `PLUSLIFE_DEVICE_HINT` — regex to recognize your dock by advertised name on
   first connect (default matches `pluslife|minidock|mira|mhealth|health`).
+- `PLUSLIFE_DOWNLOAD_DIR` — where result artifacts are saved (default `~/Downloads`).
+- `PLUSLIFE_EXPERT=0` — don't enable the app's expert mode (disables JSON export).
 - `PLUSLIFE_DEBUG=1` — verbose logging.
 
 ## Status
@@ -92,6 +114,10 @@ Verified without hardware:
 - **Web Bluetooth activation** — the auto-click reaches `requestDevice()`: on an
   `open`-launched build it triggers the OS Bluetooth permission prompt (proof the
   `executeJavaScript(code, userGesture)` gesture is accepted) instead of crashing.
+- **Save on completion** — validated end-to-end against a mock results page: the
+  screenshot and JSON both land in `~/Downloads` with correct names, once per
+  test. On a real dock, confirm the results screen exposes the expert-mode JSON
+  button (it should, since the wrapper enables expert mode).
 
 Verified on a real dock:
 
