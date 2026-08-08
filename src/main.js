@@ -9,10 +9,16 @@ const {
   dialog,
   Menu,
   shell,
+  nativeImage,
 } = require('electron');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+
+// App icon (built from the app's power.webp logo). The packaged app gets its
+// icon from assets/icon.icns via electron-builder; this PNG drives the dev dock
+// icon and the BrowserWindow icon (used on Windows/Linux).
+const ICON_PNG = path.join(__dirname, '..', 'assets', 'icon.png');
 
 // The upstream, community-maintained Pluslife web app. It already implements the
 // full device protocol (BLE + USB) and amplification-curve analysis; we reuse it
@@ -348,6 +354,7 @@ function createWindow() {
     width: 1100,
     height: 850,
     title: 'Pluslife Analyzer',
+    icon: fs.existsSync(ICON_PNG) ? ICON_PNG : undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -389,6 +396,10 @@ if (!app.requestSingleInstanceLock()) {
     logFile = path.join(app.getPath('userData'), 'pluslife-debug.log');
     config = loadConfig();
     dlog(`starting: url=${APP_URL} debug=${DEBUG} noConnect=${NO_CONNECT} expert=${EXPERT}`);
+    // Dev dock icon (packaged builds get their icon from the app bundle).
+    if (process.platform === 'darwin' && app.dock && fs.existsSync(ICON_PNG)) {
+      app.dock.setIcon(nativeImage.createFromPath(ICON_PNG));
+    }
     buildMenu();
     startCaffeinate();
     createWindow();

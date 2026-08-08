@@ -1,0 +1,8 @@
+icon.icns / icon.png are derived from the upstream app's logo:
+  https://virus.sucks/pluslife/power.webp  (200x200)
+License: MPL-2.0, "Lucentia gGmbH and contributors".
+Regenerate:
+  sips -s format png power.webp --out power.png
+  # build an .iconset at 16/32/128/256/512 (+@2x) with `sips -z`, then:
+  iconutil -c icns icon.iconset -o assets/icon.icns
+  sips -z 1024 1024 power.png --out assets/icon.png
