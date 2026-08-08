@@ -1,0 +1,16 @@
+{
+  "name": "Pluslife Analyzer",
+  "short_name": "Pluslife Analyzer",
+  "start_url": "/pluslife_app/",
+  "scope": "/pluslife_app/",
+  "display": "standalone",
+  "background_color": "#f8f8f8",
+  "theme_color": "#47adea",
+  "icons": [
+    {
+      "src": "/pluslife/power.webp",
+      "sizes": "200x200",
+      "type": "image/webp"
+    }
+  ]
+}

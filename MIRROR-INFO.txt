@@ -1,0 +1,32 @@
+Offline mirror of the virus.sucks Pluslife Analyzer web app
+===========================================================
+
+Purpose : Archival snapshot / insurance for jaraco/pluslife-analyzer issue #3,
+          in case virus.sucks becomes unavailable. Not wired into the app.
+Source  : https://virus.sucks/pluslife_app/
+Captured: 2026-08-08 (UTC)
+App ver : main (e9ef82a0)  [embedded in _js/main.js]
+License : MPL-2.0 — "Lucentia gGmbH and contributors" (per /sw.js header).
+          MPL-2.0 permits redistribution provided license notices are kept.
+Contact : hi@virus.sucks
+
+Contents mirror the site's path layout under virus.sucks/. The file set is the
+service worker's precache list (/sw.js urlsToCache) plus manifest.json and sw.js:
+
+  virus.sucks/pluslife_app/index.html        (the app page)
+  virus.sucks/pluslife_app/manifest.json
+  virus.sucks/sw.js
+  virus.sucks/_js/main.js
+  virus.sucks/_js/pluslife_app.js            (full device protocol + analysis)
+  virus.sucks/pluslife/power.webp
+  virus.sucks/favicon.ico
+  virus.sucks/assets/icons/*.svg
+
+To serve later (paths are site-absolute, so file:// won't work directly — use a
+static server rooted at virus.sucks/):
+
+  cd virus.sucks && python3 -m http.server 8080
+  # then open http://localhost:8080/pluslife_app/
+  # or point the app at it: PLUSLIFE_URL=http://localhost:8080/pluslife_app/
+
+SHA-256 checksums (see checksums.sha256).
