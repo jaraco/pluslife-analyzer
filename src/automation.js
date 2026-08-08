@@ -185,8 +185,25 @@
   // button (expert mode, enabled by preload). "JSON" is in that label in every
   // locale, so it's a reliable, language-independent completion signal. On first
   // sight we snapshot the page (via main) and click it to export the results.
+  // The expert-mode "Load test from JSON" importer also contains "JSON" and sits
+  // next to a hidden <input type="file">. Exclude it so we never trigger its file
+  // picker; the real export button ("Export raw data as JSON") has no file input.
+  function importButtons() {
+    const set = new Set();
+    deepQueryAll('input[type="file"]').forEach((inp) => {
+      const parent = inp.parentElement;
+      if (!parent) return;
+      parent.querySelectorAll('sl-button').forEach((b) => {
+        if (/json/i.test(btnText(b))) set.add(b);
+      });
+    });
+    return set;
+  }
   function exportButton() {
-    return deepQueryAll('sl-button').find((b) => /json/i.test(btnText(b))) || null;
+    const skip = importButtons();
+    return (
+      deepQueryAll('sl-button').find((b) => /json/i.test(btnText(b)) && !skip.has(b)) || null
+    );
   }
   function deviceSerial() {
     const badge = deepQueryAll('sl-badge, span, div').find((el) =>
