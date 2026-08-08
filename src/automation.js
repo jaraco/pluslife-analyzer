@@ -191,8 +191,10 @@
   function importButtons() {
     const set = new Set();
     deepQueryAll('input[type="file"]').forEach((inp) => {
-      const parent = inp.parentElement;
-      if (!parent) return;
+      // parentNode, not parentElement: the input is a direct child of a
+      // ShadowRoot, whose parentElement is null but which has querySelectorAll.
+      const parent = inp.parentNode;
+      if (!parent || !parent.querySelectorAll) return;
       parent.querySelectorAll('sl-button').forEach((b) => {
         if (/json/i.test(btnText(b))) set.add(b);
       });
