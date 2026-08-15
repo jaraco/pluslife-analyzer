@@ -287,14 +287,50 @@ function wireDownloads(ses) {
   });
 }
 
+// Full-page screenshot (the whole rendered document, not just the viewport) via
+// the DevTools Protocol — the results page scrolls past the fold, and viewport-
+// only capturePage() was clipping important data.
+async function captureFullPage(wc) {
+  const dbg = wc.debugger;
+  const weAttached = !dbg.isAttached();
+  if (weAttached) dbg.attach('1.3');
+  try {
+    const metrics = await dbg.sendCommand('Page.getLayoutMetrics');
+    const size = metrics.cssContentSize || metrics.contentSize;
+    const clip = {
+      x: 0,
+      y: 0,
+      width: Math.ceil(size.width),
+      height: Math.ceil(size.height),
+      scale: 1,
+    };
+    const shot = await dbg.sendCommand('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: true,
+      fromSurface: true,
+      clip,
+    });
+    return Buffer.from(shot.data, 'base64');
+  } finally {
+    if (weAttached) {
+      try {
+        dbg.detach();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
 async function captureScreenshot(meta) {
   if (!win || win.isDestroyed()) return;
   const target = path.join(downloadDir(), `${baseName(meta)}.png`);
   try {
-    const image = await win.webContents.capturePage();
-    await fs.promises.writeFile(target, image.toPNG());
+    await fs.promises.writeFile(target, await captureFullPage(win.webContents));
     dlog(`saved screenshot: ${target}`);
   } catch (err) {
+    // Full-page capture is the sole behavior; on failure we log and let the JSON
+    // export still proceed rather than saving a clipped viewport image.
     dlog('screenshot failed:', err && err.message);
   }
 }
