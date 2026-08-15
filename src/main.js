@@ -404,6 +404,14 @@ function createWindow() {
   wireBluetooth(win.webContents);
   wireDownloads(win.webContents.session);
 
+  // The upstream page installs a `beforeunload` guard while a test is running or
+  // finished (state 2/3). Electron honors that by cancelling the window close,
+  // which made the app impossible to quit after a run (Cmd+Q/menu/dock all
+  // silently vetoed). We auto-save results, so always allow the close.
+  win.webContents.on('will-prevent-unload', (event) => {
+    event.preventDefault();
+  });
+
   if (DEBUG) {
     win.webContents.on('console-message', (_e, _level, message) => {
       if (message.startsWith('[pluslife]')) dlog('renderer', message);
