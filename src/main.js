@@ -81,13 +81,15 @@ function saveConfig(cfg) {
 let config = {};
 
 // ---------------------------------------------------------------------------
-// Keep the Mac awake for the whole session. This is the core reason the app
-// exists: a browser page can only hold a Screen Wake Lock (released the moment
-// the tab is backgrounded), which is why tests were lost on sleep. `caffeinate`
-// holds a real IOKit PreventUserIdleSystemSleep assertion that survives
-// backgrounding and clamshell-on-external-display operation.
+// Keep the Mac awake *while a test is running* (driven by the renderer via the
+// pluslife:setKeepAwake IPC). This is the core reason the app exists: a browser
+// page can only hold a Screen Wake Lock (released the moment the tab is
+// backgrounded), which is why tests were lost on sleep. `caffeinate` holds a
+// real IOKit PreventUserIdleSystemSleep assertion that survives backgrounding
+// and clamshell-on-external-display operation.
 //   -i  prevent idle system sleep
-//   -w  release automatically when this process (Electron main) exits
+//   -w  release automatically if this process (Electron main) dies mid-test
+// startCaffeinate/stopCaffeinate are idempotent, so repeated calls are safe.
 // ---------------------------------------------------------------------------
 function startCaffeinate() {
   if (caffeinate) return;
@@ -238,6 +240,14 @@ ipcMain.handle('pluslife:setConfig', (_e, patch) => {
   config = { ...config, ...patch };
   saveConfig(config);
   return config;
+});
+
+// Renderer toggles the native keep-awake assertion as a test starts/ends.
+ipcMain.handle('pluslife:setKeepAwake', (_e, on) => {
+  if (on) startCaffeinate();
+  else stopCaffeinate();
+  dlog(`keep-awake ${on ? 'started (test active)' : 'stopped (idle)'}`);
+  return true;
 });
 
 // ---------------------------------------------------------------------------
@@ -445,7 +455,8 @@ if (!app.requestSingleInstanceLock()) {
       app.dock.setIcon(nativeImage.createFromPath(ICON_PNG));
     }
     buildMenu();
-    startCaffeinate();
+    // Keep-awake is no longer session-wide; the renderer starts/stops it per
+    // test via the pluslife:setKeepAwake IPC (see below).
     createWindow();
 
     app.on('activate', () => {

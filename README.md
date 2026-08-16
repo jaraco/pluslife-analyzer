@@ -5,7 +5,7 @@ molecular tests, built to fix four annoyances with using the web app in Chrome:
 
 | Problem with the browser app | How this fixes it |
 | --- | --- |
-| Mac sleeps mid-test → connection drops, data lost | Holds a native `caffeinate -i` idle-sleep assertion for the whole session (a web page can only hold a Screen Wake Lock, which is released the moment the tab is backgrounded — that's why tests were lost) |
+| Mac sleeps mid-test → connection drops, data lost | Holds a native `caffeinate -i` idle-sleep assertion **while a test is running** (heating/testing/reconnected), released when idle or done (a web page can only hold a Screen Wake Lock, which is released the moment the tab is backgrounded — that's why tests were lost) |
 | Must re-select the Bluetooth device every launch | Intercepts Chromium's device chooser and auto-selects the remembered dock |
 | Must re-select the test type every run | Remembers and re-applies your last test kit |
 | Open Chrome → pick profile → load site | It's a normal `.app` with a dock icon |

@@ -25,6 +25,7 @@
     connectCooldownMs: 8000,
     dumped: false,
     savedThisTest: false,
+    keepAwake: false,
   };
 
   // Load persisted config once (async; fine if the first few ticks miss it).
@@ -238,6 +239,23 @@
       .catch((err) => log('save-on-complete failed', err && err.message));
   }
 
+  // Keep the Mac awake only while a test is actually in progress, so an idle
+  // (but open) app doesn't prevent sleep. pluslife-app._state uses the app's
+  // state enum: 2=TESTING, 4=BLOCKED_ALREADY_TESTING (reconnected to a running
+  // test), 5=BLOCKED_NOT_READY (heating). Reading _state (not the lazily-created
+  // .data) is reliable, and it's independent of window visibility — so keeping
+  // it awake survives backgrounding, unlike the app's own screen wake lock.
+  const KEEP_AWAKE_STATES = new Set([2, 4, 5]);
+  function updateKeepAwake() {
+    const el = document.querySelector('pluslife-app');
+    const s = el && typeof el._state === 'number' ? el._state : null;
+    const active = s != null && KEEP_AWAKE_STATES.has(s);
+    if (active === state.keepAwake) return;
+    state.keepAwake = active;
+    log('keep-awake', active ? `ON (state ${s})` : `OFF (state ${s})`);
+    if (window.plBridge && window.plBridge.setKeepAwake) window.plBridge.setKeepAwake(active);
+  }
+
   function tick() {
     try {
       acceptDisclaimer();
@@ -245,6 +263,7 @@
       reconnectWatchdog();
       restoreTestType();
       saveOnComplete();
+      updateKeepAwake();
     } catch (err) {
       log('tick error', err && err.message);
     }

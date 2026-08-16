@@ -21,4 +21,6 @@ contextBridge.exposeInMainWorld('plBridge', {
   setConfig: (patch) => ipcRenderer.invoke('pluslife:setConfig', patch),
   // Signal that a test finished; main snapshots the page and arms the JSON save.
   testComplete: (meta) => ipcRenderer.invoke('pluslife:testComplete', meta),
+  // Start/stop the native keep-awake assertion as a test starts/ends.
+  setKeepAwake: (on) => ipcRenderer.invoke('pluslife:setKeepAwake', on),
 });
