@@ -471,7 +471,14 @@ function createWindow() {
   // Electron 43 replaced the positional (event, level, message, ...) form with a
   // single event object; the old signature still fires but logs a deprecation.
   win.webContents.on('console-message', ({ message }) => {
-    if (!message || !message.startsWith('[pluslife]')) return;
+    if (!message) return;
+    if (!message.startsWith('[pluslife]')) {
+      // Under --pluslife-debug, keep the upstream app's own console too: its
+      // transport narrates every GATT drop, retry and timeout, which is the
+      // only account of what the link actually did during a stall.
+      if (DEBUG) dlog('page', message);
+      return;
+    }
     // Stall and recovery chatter is the evidence for what went wrong; keep it
     // whether or not this run was started with --pluslife-debug.
     if (/stall|recovery|export|resumed|disconnect/i.test(message)) elog('renderer', message);

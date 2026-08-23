@@ -154,8 +154,11 @@ re-subscribes to notifications, so it writes into a void, and its own request
 timeouts are swallowed. The test never reaches DONE, so the save-on-completion path
 above never fires.
 
-This app watches the test controller for that silence (samples normally arrive about
-every 30 s; two minutes without one is a stall) and then, in order:
+Measured against a real dock, temperature samples arrive every **2.0 s** (the ~30 s
+spacing of points on the graph is decimation, not the stream rate) and reaction
+samples in bursts about a minute apart. Twenty seconds of silence — ten missed
+messages — is therefore the trigger. This app watches the test controller for it and
+then, in order:
 
 1. **Saves what you have** — screenshot plus the app's own JSON export, both tagged
    `-partial-` in the filename. The export lives on the test controller rather than

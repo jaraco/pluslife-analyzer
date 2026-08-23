@@ -37,12 +37,17 @@
     exportPending: false,
   };
 
-  // A running test that has gone this long without a single packet is stalled:
-  // samples arrive roughly every 30 s, so two minutes of silence is well past
-  // any normal gap. Recovery is then re-attempted on this cadence for as long as
-  // the silence lasts -- long enough for a reconnect (which re-runs the device
+  // A running test that has gone this long without a single packet is stalled.
+  // Measured against a real dock: temperature samples land every 2.0 s (174 of
+  // them across a 5.7 min run; min 1.7 s, max 2.2 s), with reaction samples
+  // arriving in bursts about a minute apart. The graph's ~30 s point spacing is
+  // decimation, not the stream rate. Twenty seconds is therefore ten missed
+  // messages -- past any plausible hiccup, including the ~5-10 s upstream's own
+  // GATT retry loop takes to heal or give up, without waiting minutes to react.
+  // Recovery is then re-attempted on the second cadence for as long as the
+  // silence lasts: long enough for a reconnect (which re-runs the device
   // handshake) to actually land before we judge it failed.
-  const STALL_MS = 120000;
+  const STALL_MS = 20000;
   const RECOVERY_SETTLE_MS = 45000;
 
   // Load persisted config once (async; fine if the first few ticks miss it).
