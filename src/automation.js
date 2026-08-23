@@ -240,15 +240,26 @@
   }
 
   // Keep the Mac awake only while a test is actually in progress, so an idle
-  // (but open) app doesn't prevent sleep. pluslife-app._state uses the app's
-  // state enum: 2=TESTING, 4=BLOCKED_ALREADY_TESTING (reconnected to a running
-  // test), 5=BLOCKED_NOT_READY (heating). Reading _state (not the lazily-created
-  // .data) is reliable, and it's independent of window visibility — so keeping
-  // it awake survives backgrounding, unlike the app's own screen wake lock.
+  // (but open) app doesn't prevent sleep. The test state lives on the test
+  // controller at <test-view>.data.state: 2=TESTING, 4=BLOCKED_ALREADY_TESTING
+  // (reconnected to a running test), 5=BLOCKED_NOT_READY (heating).
+  //
+  // Do NOT reach for pluslife-app._state: it is a *different* enum — the
+  // connection state (0=not connected, 1=connecting, 2=connected, 3=connection
+  // lost, 4=disconnecting, 5=reconnecting). Reading it held the assertion for as
+  // long as the dock was connected, idle or not, and released it the moment the
+  // link dropped mid-test — exactly when the Mac must stay awake to reconnect.
+  //
+  // The controller is independent of window visibility, so this survives
+  // backgrounding, unlike the app's own screen wake lock.
   const KEEP_AWAKE_STATES = new Set([2, 4, 5]);
+  function testState() {
+    const tv = deepQuery('test-view');
+    const s = tv && tv.data ? tv.data.state : null;
+    return typeof s === 'number' ? s : null;
+  }
   function updateKeepAwake() {
-    const el = document.querySelector('pluslife-app');
-    const s = el && typeof el._state === 'number' ? el._state : null;
+    const s = testState();
     const active = s != null && KEEP_AWAKE_STATES.has(s);
     if (active === state.keepAwake) return;
     state.keepAwake = active;
