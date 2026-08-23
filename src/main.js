@@ -36,16 +36,29 @@ const EXPERT =
   process.env.PLUSLIFE_EXPERT !== '0' && !process.argv.includes('--no-expert');
 
 let logFile = null; // set once app paths are available
-function dlog(...args) {
+function logLine(args) {
   const line = `[${new Date().toISOString()}] ${args.join(' ')}`;
   console.log(line);
-  if (DEBUG && logFile) {
-    try {
-      fs.appendFileSync(logFile, `${line}\n`);
-    } catch {
-      /* ignore */
-    }
+  return line;
+}
+function writeLog(line) {
+  if (!logFile) return;
+  try {
+    fs.appendFileSync(logFile, `${line}\n`);
+  } catch {
+    /* ignore */
   }
+}
+// Verbose tracing: file only under --pluslife-debug.
+function dlog(...args) {
+  const line = logLine(args);
+  if (DEBUG) writeLog(line);
+}
+// Significant events (test complete, stall, recovery, salvage) always reach the
+// log file: an `open`-launched app has no terminal, so this is the only record
+// of a run that went wrong, and a stall is exactly the case nobody was watching.
+function elog(...args) {
+  writeLog(logLine(args));
 }
 
 // Regex used to recognize the dock the first time, before we have a remembered id.
@@ -281,6 +294,9 @@ function baseName(meta) {
   const parts = ['pluslife'];
   if (meta.testType) parts.push(String(meta.testType).replace(/[^\w.-]+/g, '-'));
   if (meta.serial) parts.push(String(meta.serial).replace(/[^\w.-]+/g, '-'));
+  // A capture taken mid-test (stall salvage or a manual save) has no result in
+  // it; say so in the name rather than letting it pass for a finished run.
+  if (meta.partial) parts.push('partial');
   parts.push(stamp());
   return parts.join('-');
 }
@@ -349,7 +365,8 @@ async function captureScreenshot(meta) {
 // app's JSON export (caught by will-download above).
 ipcMain.handle('pluslife:testComplete', async (_e, meta) => {
   lastMeta = meta || {};
-  dlog(`test complete: ${JSON.stringify(lastMeta)}`);
+  if (lastMeta.partial) elog(`partial capture: ${JSON.stringify(lastMeta)}`);
+  else dlog(`test complete: ${JSON.stringify(lastMeta)}`);
   await captureScreenshot(lastMeta);
   return true;
 });
@@ -357,6 +374,33 @@ ipcMain.handle('pluslife:testComplete', async (_e, meta) => {
 // ---------------------------------------------------------------------------
 // Application menu: let the user change where artifacts are saved.
 // ---------------------------------------------------------------------------
+// Salvage the data collected so far, at any point in a run. The upstream export
+// lives on the test controller rather than on the results screen, so the
+// renderer can call it mid-test -- see saveNow() in automation.js.
+async function saveCurrentTestData() {
+  if (!win || win.isDestroyed()) return;
+  let res = null;
+  try {
+    res = await win.webContents.executeJavaScript(
+      'window.__pluslife && window.__pluslife.saveNow()',
+      true,
+    );
+  } catch (err) {
+    res = { ok: false, reason: (err && err.message) || 'the page did not respond' };
+  }
+  if (res && res.ok) {
+    elog(`manual save: ${res.samples} samples -> ${downloadDir()}`);
+    return;
+  }
+  await dialog.showMessageBox(win, {
+    type: 'info',
+    message: 'Nothing to save yet',
+    detail:
+      (res && res.reason) ||
+      'No test data has been collected. Connect the dock and start a test first.',
+  });
+}
+
 async function chooseDownloadFolder() {
   const res = await dialog.showOpenDialog(win, {
     title: 'Choose download folder for test results',
@@ -376,6 +420,8 @@ function buildMenu() {
     {
       label: 'File',
       submenu: [
+        { label: 'Save Current Test Data', click: saveCurrentTestData },
+        { type: 'separator' },
         { label: 'Set Download Folder…', click: chooseDownloadFolder },
         {
           label: 'Open Download Folder',
@@ -422,11 +468,15 @@ function createWindow() {
     event.preventDefault();
   });
 
-  if (DEBUG) {
-    win.webContents.on('console-message', (_e, _level, message) => {
-      if (message.startsWith('[pluslife]')) dlog('renderer', message);
-    });
-  }
+  // Electron 43 replaced the positional (event, level, message, ...) form with a
+  // single event object; the old signature still fires but logs a deprecation.
+  win.webContents.on('console-message', ({ message }) => {
+    if (!message || !message.startsWith('[pluslife]')) return;
+    // Stall and recovery chatter is the evidence for what went wrong; keep it
+    // whether or not this run was started with --pluslife-debug.
+    if (/stall|recovery|export|resumed|disconnect/i.test(message)) elog('renderer', message);
+    else if (DEBUG) dlog('renderer', message);
+  });
 
   win.webContents.on('did-finish-load', () => installAutomation(win.webContents));
   win.on('closed', () => {

@@ -1,7 +1,7 @@
 # Pluslife Analyzer
 
 A one-click macOS app for running [Pluslife](https://virus.sucks/pluslife_app/)
-molecular tests, built to fix four annoyances with using the web app in Chrome:
+molecular tests, built to fix five annoyances with using the web app in Chrome:
 
 | Problem with the browser app | How this fixes it |
 | --- | --- |
@@ -10,6 +10,7 @@ molecular tests, built to fix four annoyances with using the web app in Chrome:
 | Must re-select the test type every run | Remembers and re-applies your last test kit |
 | Open Chrome → pick profile → load site | It's a normal `.app` with a dock icon |
 | Results not captured anywhere by default | On completion, auto-saves a screenshot **and** the JSON export to `~/Downloads` |
+| A stalled test is unrecoverable — the countdown freezes, nothing ever completes, and the data collected so far is stranded behind a results screen you never reach | Watches for the silence, saves what has been collected, then forces a reconnect (see *Stalled tests* below) |
 
 It is a thin Electron shell around the community-maintained
 [virus.sucks Pluslife Analyzer](https://virus.sucks/pluslife_app/). We deliberately
@@ -133,8 +134,47 @@ Implemented, verify on your next test cycle:
   or picking from the dropdown). It only appears on the pre-test selection screen,
   so: connect, pick your kit once, quit, relaunch — it should come back selected.
   `npm run debug` logs the kit buttons it sees.
-- **Reconnect watchdog** — clicks Reconnect on a drop; needs a real drop to tune
-  timing.
+- **Reconnect watchdog** — clicks Reconnect on a drop (rate-limited to one click
+  per 8 s); needs a real drop to tune timing.
+- **Stall detection and salvage** — validated end-to-end against a mock page whose
+  test controller simply stops producing data: the `-partial-` screenshot and JSON
+  land in the download folder, and only then is the link dropped to force a
+  reconnect. The detection thresholds, and whether a reconnect actually resumes a
+  running test on real hardware, still want a live run — the app's own **Disconnect
+  from device** button reproduces the drop deliberately.
+
+## Stalled tests
+
+Occasionally a run just stops: **Remaining time** freezes, the graphs stop growing,
+and the app sits there claiming to be connected forever. The countdown is pure wall
+clock and only repaints when a packet arrives, so a frozen countdown means exactly
+one thing — nothing is coming from the dock any more. Upstream never notices: after
+a GATT drop its transport re-acquires the *write* characteristic but never
+re-subscribes to notifications, so it writes into a void, and its own request
+timeouts are swallowed. The test never reaches DONE, so the save-on-completion path
+above never fires.
+
+This app watches the test controller for that silence (samples normally arrive about
+every 30 s; two minutes without one is a stall) and then, in order:
+
+1. **Saves what you have** — screenshot plus the app's own JSON export, both tagged
+   `-partial-` in the filename. The export lives on the test controller rather than
+   on the results screen, so it works mid-test; the file simply has no `testResult`.
+   The data is on disk *before* anything touches the connection.
+2. **Forces a reconnect** — drops the link so the app finally shows **Reconnect**,
+   which the existing watchdog clicks. That path runs a full connect and does
+   re-subscribe to notifications. `test-view` stays mounted throughout, so the
+   samples already collected survive and a successful reconnect resumes the same
+   test. Retried every 45 s for as long as the silence lasts.
+
+If data starts flowing again, the watchdog re-arms and a normal completion still
+saves the full artifacts — you just also have the partial capture from the gap.
+
+**File → Save Current Test Data** does step 1 on demand, at any point in a run.
+
+Stall, recovery and salvage lines are always written to
+`~/Library/Application Support/pluslife-analyzer/pluslife-debug.log`, even without
+`--pluslife-debug`, since a stall is by definition something nobody was watching.
 
 ## Relationship to virus.sucks
 
