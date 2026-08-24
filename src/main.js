@@ -522,7 +522,11 @@ function createWindow() {
     }
     // Stall and recovery chatter is the evidence for what went wrong; keep it
     // whether or not this run was started with --pluslife-debug.
-    if (/stall|recovery|export|resumed|disconnect|alert/i.test(message)) elog('renderer', message);
+    // \b matters: without it "automation installed" matches on "in-stall-ed" and
+    // every launch writes a spurious significant-event line.
+    if (/\b(stall|recovery|export|resumed|disconnect|alert|orphan)/i.test(message)) {
+      elog('renderer', message);
+    }
     else if (DEBUG) dlog('renderer', message);
   });
 
