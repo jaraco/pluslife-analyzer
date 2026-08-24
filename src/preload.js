@@ -23,4 +23,6 @@ contextBridge.exposeInMainWorld('plBridge', {
   testComplete: (meta) => ipcRenderer.invoke('pluslife:testComplete', meta),
   // Start/stop the native keep-awake assertion as a test starts/ends.
   setKeepAwake: (on) => ipcRenderer.invoke('pluslife:setKeepAwake', on),
+  // Cancel a device chooser the page can no longer abandon on its own.
+  cancelBluetoothChooser: () => ipcRenderer.invoke('pluslife:cancelBluetoothChooser'),
 });

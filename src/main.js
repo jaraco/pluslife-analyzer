@@ -155,12 +155,13 @@ function wireBluetooth(contents) {
     event.preventDefault();
     btCallback = callback;
 
-    if (DEBUG) {
-      console.log(
-        '[pluslife] bluetooth devices:',
-        deviceList.map((d) => `${d.deviceName || '(unnamed)'} = ${d.deviceId}`),
-      );
-    }
+    // dlog, not console.log: an `open`-launched app has no terminal, so this
+    // went nowhere -- and what the chooser can and cannot see is the first
+    // question worth asking when a reconnect won't take.
+    dlog(
+      'bluetooth devices:',
+      JSON.stringify(deviceList.map((d) => `${d.deviceName || '(unnamed)'}=${d.deviceId}`)),
+    );
 
     const pick = chooseDevice(deviceList);
     if (pick) {
@@ -253,6 +254,27 @@ ipcMain.handle('pluslife:setConfig', (_e, patch) => {
   config = { ...config, ...patch };
   saveConfig(config);
   return config;
+});
+
+// Cancel an in-flight requestDevice() chooser. A page cannot abandon its own
+// pending requestDevice(), and one that was scanning when the Bluetooth adapter
+// cycled never resolves -- leaving the app stuck on "Reconnecting" with no way
+// to start the fresh scan that would actually find the dock (#8). Only the main
+// process holds the callback that ends it.
+ipcMain.handle('pluslife:cancelBluetoothChooser', () => {
+  if (!btCallback) return false;
+  const cb = btCallback;
+  btCallback = null;
+  clearTimeout(btTimer);
+  btTimer = null;
+  try {
+    cb(''); // rejects requestDevice() with NotFoundError, which upstream expects
+  } catch (err) {
+    dlog('chooser cancel failed:', err && err.message);
+    return false;
+  }
+  dlog('cancelled a pending Bluetooth chooser');
+  return true;
 });
 
 // Renderer toggles the native keep-awake assertion as a test starts/ends.
@@ -414,6 +436,22 @@ async function chooseDownloadFolder() {
   }
 }
 
+// Debug-only: make the link go silent without touching the radio, so the stall
+// watchdog and its recovery can be exercised on demand (see automation.js).
+async function simulateStall() {
+  if (!win || win.isDestroyed()) return;
+  let res = null;
+  try {
+    res = await win.webContents.executeJavaScript(
+      'window.__pluslife && window.__pluslife.simulateStall()',
+      true,
+    );
+  } catch (err) {
+    res = { ok: false, reason: (err && err.message) || 'the page did not respond' };
+  }
+  elog(`simulate stall: ${res && res.ok ? 'notifications stopped' : (res && res.reason) || 'failed'}`);
+}
+
 function buildMenu() {
   const template = [
     ...(process.platform === 'darwin' ? [{ role: 'appMenu' }] : []),
@@ -421,6 +459,9 @@ function buildMenu() {
       label: 'File',
       submenu: [
         { label: 'Save Current Test Data', click: saveCurrentTestData },
+        ...(DEBUG
+          ? [{ label: 'Simulate Link Stall (debug)', click: simulateStall }]
+          : []),
         { type: 'separator' },
         { label: 'Set Download Folder…', click: chooseDownloadFolder },
         {
@@ -481,7 +522,7 @@ function createWindow() {
     }
     // Stall and recovery chatter is the evidence for what went wrong; keep it
     // whether or not this run was started with --pluslife-debug.
-    if (/stall|recovery|export|resumed|disconnect/i.test(message)) elog('renderer', message);
+    if (/stall|recovery|export|resumed|disconnect|alert/i.test(message)) elog('renderer', message);
     else if (DEBUG) dlog('renderer', message);
   });
 

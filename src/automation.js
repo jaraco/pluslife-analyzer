@@ -35,6 +35,8 @@
     recoveries: 0,
     lastRecoveryAt: 0,
     exportPending: false,
+    disconnectDeadline: 0,
+    reconnectingSince: 0,
   };
 
   // A running test that has gone this long without a single packet is stalled.
@@ -49,6 +51,27 @@
   // handshake) to actually land before we judge it failed.
   const STALL_MS = 20000;
   const RECOVERY_SETTLE_MS = 45000;
+
+  // Neither gatt.connect() nor CoreBluetooth beneath it has a timeout, so a link
+  // that dies mid-test leaves promises pending forever: upstream's writer routine
+  // wedges awaiting a reconnect that never settles, its disconnect() wedges behind
+  // that (it awaits the routine), and the app sits on a green "Connected" badge
+  // over a dead link. Recovery therefore cannot trust any of those promises to
+  // settle -- each step below gets a deadline, after which we set the state the
+  // app should have reached on its own. Observed on a real dock; see #8.
+  const DISCONNECT_TIMEOUT_MS = 5000;
+  const RECONNECTING_TIMEOUT_MS = 30000;
+
+  // Upstream reports connection failures with alert(), which blocks the renderer
+  // thread outright: while a dialog is up our tick stops, the stall watchdog stops,
+  // and a failed reconnect waits for a human. Tests run ~35 minutes unattended, so
+  // that dialog is fatal to exactly the recovery this wrapper exists to perform --
+  // observed costing 35 s of a live recovery until someone clicked OK. Log instead.
+  // confirm() is deliberately left alone: it guards stopping a running test and
+  // enabling expert mode, where auto-answering would be wrong.
+  window.alert = function (msg) {
+    log('suppressed alert:', String(msg).replace(/\s+/g, ' ').slice(0, 300));
+  };
 
   // Load persisted config once (async; fine if the first few ticks miss it).
   if (window.plBridge) {
@@ -307,16 +330,27 @@
   //
   // A stalled test looks like nothing at all: the countdown freezes (it only
   // repaints when a packet arrives), the graphs stop growing, and the app stays
-  // cheerfully "Connected" forever. Upstream's BLE transport re-acquires the
-  // write characteristic after a GATT drop but never re-subscribes to
-  // notifications, so it writes into a void; its own 5 s request timeouts are
-  // swallowed by the housekeeping routine. Nothing ever reaches DONE, so the
-  // save-on-completion path never fires and the data collected so far is stranded.
+  // cheerfully "Connected" forever while housekeeping times out every 7 s.
   //
-  // We watch the controller's data for silence, put what we have on disk first,
-  // and only then tear the link down so the app offers "Reconnect" -- which runs
-  // a full _connect() and does re-subscribe. The controller (and its samples)
-  // outlives that, so a successful reconnect resumes the same test.
+  // Measured cause, against a real dock: nothing in upstream's connect path has a
+  // timeout. When the link dies, its writer routine retries gatt.connect(), and
+  // CoreBluetooth waits indefinitely for a peripheral that never answers. That one
+  // pending promise wedges the routine; disconnect() wedges behind it (it awaits
+  // the routine); isConnected stays true, so the app never reports a lost link and
+  // never offers Reconnect. Nothing reaches DONE, so save-on-completion never fires
+  // and the samples collected so far are stranded.
+  //
+  // A briefer glitch can leave the link healthy but silent instead: CoreBluetooth
+  // completes the pending reconnect on its own, and upstream re-acquires only the
+  // write characteristic without re-subscribing to notifications. Indistinguishable
+  // from here, and handled identically.
+  //
+  // So: watch the controller's data for silence, put what we have on disk first,
+  // and only then touch the link -- giving every step a deadline, since none of
+  // upstream's promises can be trusted to settle. test-view stays mounted across
+  // "Connection lost" (it is only torn down at "Not connected"), so the controller
+  // and its samples survive and a successful reconnect resumes the same test --
+  // verified on hardware as one continuous curve across the gap.
 
   // Newest datum the app holds. Reaction samples stamp _lastSampleTime; the
   // temperature series carries its own timestamps and rides the same notification
@@ -392,6 +426,17 @@
       return; // reconnectWatchdog will click the button
     }
     log(`recovery ${state.recoveries}: dropping the link to force a reconnect`);
+    // Cancel the GATT link at the source first. This does *not* unwedge the
+    // pending gatt.connect() -- the disconnect below still hangs and the deadline
+    // below still has to fire -- but it is what releases the peripheral: with it,
+    // the dock resumed advertising on its own, where previously only cycling the
+    // host's Bluetooth ever brought it back.
+    try {
+      const gatt = pl.bluetoothDevice && pl.bluetoothDevice.gatt;
+      if (gatt) gatt.disconnect();
+    } catch (err) {
+      log('gatt.disconnect threw', err && err.message);
+    }
     try {
       Promise.resolve(pl.disconnect('pluslife-analyzer stall watchdog')).catch((err) =>
         log('forced disconnect rejected', err && err.message),
@@ -399,6 +444,79 @@
     } catch (err) {
       log('forced disconnect threw', err && err.message);
     }
+    state.disconnectDeadline = Date.now() + DISCONNECT_TIMEOUT_MS;
+  }
+
+  // Upstream's interval routines reschedule themselves forever and are only ever
+  // stopped by a disconnect that runs to completion. When we force the lost-link
+  // state instead, the writer routine is left running, and the next _connect()
+  // overwrites the reference -- so it spins on a null gattServer once a second for
+  // the life of the app (TypeError: Cannot read properties of null), one more
+  // orphan per recovery. stop() flips its `stopped` flag synchronously, which is
+  // what ends the rescheduling; the promise it returns may never settle (it awaits
+  // the same wedged work), so it must not be awaited.
+  function stopRoutine(routine, what) {
+    if (!routine || typeof routine.stop !== 'function' || routine.stopped) return;
+    try {
+      const done = routine.stop();
+      if (done && typeof done.catch === 'function') done.catch(() => {});
+      log(`stopped the orphaned ${what} routine`);
+    } catch (err) {
+      log(`could not stop the ${what} routine`, err && err.message);
+    }
+  }
+
+  // The two places the app can hang forever, each resolved to the state it would
+  // have reached itself if the promise it is waiting on could fail.
+  function unwedgeConnection() {
+    const app = document.querySelector('pluslife-app');
+    const pl = app && app.pluslife;
+    if (!app || !pl) return;
+
+    // (a) A forced disconnect that never completed. Declare the link gone so the
+    // app renders "Connection lost" and its Reconnect button, rather than a green
+    // badge over a link that stopped delivering minutes ago.
+    //
+    // The deadline belongs to one disconnect attempt. Once the transport reports
+    // disconnected the attempt has landed, so retire it -- otherwise a reconnect
+    // that completes inside the window gets torn down by a deadline meant for the
+    // link before it, costing another round trip (observed 2026-08-23: reconnected
+    // at +3.0s, deadline fired at +5.3s, reconnected again at +9.0s).
+    if (state.disconnectDeadline && !pl.connected()) state.disconnectDeadline = 0;
+    if (state.disconnectDeadline && Date.now() > state.disconnectDeadline) {
+      state.disconnectDeadline = 0;
+      if (pl.connected()) {
+        log('disconnect never completed; forcing the app into its lost-link state');
+        // Do this before the reconnect replaces the reference and strands it.
+        stopRoutine(pl.writerRoutine, 'writer');
+        pl.isConnected = false;
+        try {
+          pl.broadcastConnectionStatus();
+        } catch (err) {
+          log('broadcast failed', err && err.message);
+        }
+      }
+    }
+
+    // (b) Stuck in "Reconnecting" (connection state 5). The requestDevice() behind
+    // it does not survive the adapter being cycled -- which is exactly what revives
+    // the dock -- so it can never resolve, and state 5 renders no Reconnect button
+    // to start a fresh one. Drop back to "Connection lost" so a new scan can begin.
+    if (app._state !== 5) {
+      state.reconnectingSince = 0;
+      return;
+    }
+    if (!state.reconnectingSince) {
+      state.reconnectingSince = Date.now();
+      return;
+    }
+    if (Date.now() - state.reconnectingSince < RECONNECTING_TIMEOUT_MS) return;
+    state.reconnectingSince = 0;
+    log('reconnect stuck; cancelling the chooser and re-arming Reconnect');
+    if (window.plBridge && window.plBridge.cancelBluetoothChooser) {
+      window.plBridge.cancelBluetoothChooser();
+    }
+    app._state = 3;
   }
 
   function stallWatchdog() {
@@ -424,6 +542,7 @@
       state.salvaged = false;
       state.recoveries = 0;
       state.lastRecoveryAt = 0;
+      state.disconnectDeadline = 0; // the stall is over; nothing left to force
       return;
     }
 
@@ -455,6 +574,7 @@
       saveOnComplete();
       updateKeepAwake();
       stallWatchdog();
+      unwedgeConnection();
     } catch (err) {
       log('tick error', err && err.message);
     }
@@ -466,6 +586,24 @@
     return exportNow('manual save');
   }
 
-  window.__pluslife = { tick, saveNow, deepQueryAll };
+  // Debug-only fault injection (File menu, --pluslife-debug builds). Stops the
+  // GATT notification stream while leaving the link connected -- which is exactly
+  // what a brief radio glitch leaves behind once CoreBluetooth silently completes
+  // upstream's pending reconnect and it re-acquires only the write characteristic.
+  // The app notices nothing: green badge, frozen countdown, housekeeping timing
+  // out. Recovering from this without losing the curve is the whole question.
+  function simulateStall() {
+    const app = document.querySelector('pluslife-app');
+    const pl = app && app.pluslife;
+    if (!pl || !pl.notificationCharacteristic) {
+      return Promise.resolve({ ok: false, reason: 'not connected over Bluetooth' });
+    }
+    log('DEBUG: stopping notifications to simulate a silent stall');
+    return Promise.resolve(pl.notificationCharacteristic.stopNotifications())
+      .then(() => ({ ok: true }))
+      .catch((err) => ({ ok: false, reason: (err && err.message) || 'stopNotifications failed' }));
+  }
+
+  window.__pluslife = { tick, saveNow, simulateStall, deepQueryAll };
   log('automation installed');
 })();

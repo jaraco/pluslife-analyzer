@@ -136,23 +136,39 @@ Implemented, verify on your next test cycle:
   `npm run debug` logs the kit buttons it sees.
 - **Reconnect watchdog** — clicks Reconnect on a drop (rate-limited to one click
   per 8 s); needs a real drop to tune timing.
-- **Stall detection and salvage** — validated end-to-end against a mock page whose
-  test controller simply stops producing data: the `-partial-` screenshot and JSON
-  land in the download folder, and only then is the link dropped to force a
-  reconnect. The detection thresholds, and whether a reconnect actually resumes a
-  running test on real hardware, still want a live run — the app's own **Disconnect
-  from device** button reproduces the drop deliberately.
+Verified on a real dock (2026-08-23, five induced stalls):
+
+- **Stall detection and salvage** — detected at exactly 20 s every time, with the
+  `-partial-` screenshot and JSON on disk within 0.2 s, before anything touched the
+  connection.
+- **In-session recovery with the curve intact** — after a simulated silent stall
+  (`File → Simulate Link Stall` in `--pluslife-debug` builds stops the notification
+  stream while leaving the link up, which is what a brief radio glitch leaves
+  behind), the app salvaged, forced the lost-link state, reconnected, and resumed the
+  same test. The final export ran continuously from test start to completion with a
+  single gap where the link was down — not a fresh series from the reconnect — and
+  the result was captured normally.
+- **Known limit** — if the *host's* Bluetooth adapter is cycled (rather than the link
+  merely glitching), that renderer's Web Bluetooth scanning never recovers: no amount
+  of clicking Reconnect finds the dock again, while a fresh process finds it in under
+  a second. Salvage still happens, so no data is lost; recovery in that case needs
+  the app restarted. See issue #8.
 
 ## Stalled tests
 
 Occasionally a run just stops: **Remaining time** freezes, the graphs stop growing,
 and the app sits there claiming to be connected forever. The countdown is pure wall
 clock and only repaints when a packet arrives, so a frozen countdown means exactly
-one thing — nothing is coming from the dock any more. Upstream never notices: after
-a GATT drop its transport re-acquires the *write* characteristic but never
-re-subscribes to notifications, so it writes into a void, and its own request
-timeouts are swallowed. The test never reaches DONE, so the save-on-completion path
-above never fires.
+one thing — nothing is coming from the dock any more. The test never reaches DONE,
+so the save-on-completion path above never fires.
+
+Upstream cannot recover from this, for a reason worth knowing: **nothing in its
+connect path has a timeout**. After a GATT drop its transport retries
+`gatt.connect()`, and CoreBluetooth will wait forever for a peripheral that never
+answers. That one pending promise wedges the writer routine; `disconnect()` wedges
+behind it (it awaits the routine); the app keeps its green **Connected** badge; and
+housekeeping times out every 7 s until you close the window. Recovery therefore
+cannot trust *any* of those promises to settle — every step below has a deadline.
 
 Measured against a real dock, temperature samples arrive every **2.0 s** (the ~30 s
 spacing of points on the graph is decimation, not the stream rate) and reaction
@@ -164,14 +180,28 @@ then, in order:
    `-partial-` in the filename. The export lives on the test controller rather than
    on the results screen, so it works mid-test; the file simply has no `testResult`.
    The data is on disk *before* anything touches the connection.
-2. **Forces a reconnect** — drops the link so the app finally shows **Reconnect**,
-   which the existing watchdog clicks. That path runs a full connect and does
-   re-subscribe to notifications. `test-view` stays mounted throughout, so the
-   samples already collected survive and a successful reconnect resumes the same
-   test. Retried every 45 s for as long as the silence lasts.
+2. **Forces a reconnect** — cancels the GATT link, then asks the transport to
+   disconnect. If that hasn't completed in 5 s (it usually hasn't), declares the
+   link lost directly so the app renders **Reconnect** instead of a green badge over
+   a dead link, and stops the writer routine upstream would otherwise strand. The
+   existing watchdog clicks Reconnect; that path runs a full connect and does
+   re-subscribe to notifications. Retried every 45 s while the silence lasts.
+3. **Keeps the app clickable** — a `requestDevice()` that was scanning when the
+   Bluetooth adapter cycled never resolves, and the "Reconnecting" state renders no
+   button to start a fresh one. After 30 s, the chooser is cancelled from the main
+   process (something no web page can do for itself) and the app drops back so a new
+   scan can begin.
 
-If data starts flowing again, the watchdog re-arms and a normal completion still
-saves the full artifacts — you just also have the partial capture from the gap.
+Crucially, `test-view` stays mounted throughout — the app only tears the controller
+down when it reaches "Not connected", which this path deliberately avoids. So the
+samples collected before the stall survive in memory, and a successful reconnect
+resumes *the same test*: one continuous curve, and a normal completion still writes
+the full artifacts. You just also have the partial capture from the gap.
+
+Upstream's `alert()` on a failed connection is replaced with a log line. It blocks
+the renderer thread, which stops the watchdog and the retry loop dead until someone
+clicks OK — fatal for a 35-minute test running unattended. `confirm()` is left alone,
+since it guards stopping a test and enabling expert mode.
 
 **File → Save Current Test Data** does step 1 on demand, at any point in a run.
 
