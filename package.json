@@ -1,6 +1,6 @@
 {
   "name": "pluslife-analyzer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "macOS app for the Pluslife molecular test system. Wraps the virus.sucks web app in an Electron shell that keeps the Mac awake (caffeinate), auto-reconnects to the last Bluetooth device, remembers the last test type, and launches in one click.",
   "main": "src/main.js",
