@@ -1,0 +1,187 @@
+/* The colours, here for the site (site.css) and the dev pages under Vite:
+   light by default, dark where the system prefers it. Shadow DOM components
+   use them with their light value as the fallback, because the Altruan embed
+   runs without this file and stays light on their page. Shoelace follows
+   along with its dark theme (color_scheme.ts). */
+:root {
+  color-scheme: light dark;
+  --vs-text: #1a1a1a;
+  --vs-muted: #5f6368;
+  --vs-border: #ddd;
+  --vs-bg: #f8f8f8;
+  --vs-surface: #fff;
+  /* Table stripes, a table's header, buttons under the pointer. */
+  --vs-shade: #f2f2f2;
+  --vs-accent: #b3261e;
+  --vs-link: #0b57d0;
+  --vs-warning-bg: rgba(255, 204, 0, 0.58);
+  --vs-warning-border: #ffcc00;
+  /* A notice to read first (.notice, site.css): calmer than a warning. */
+  --vs-notice-bg: #fff8e1;
+  --vs-notice-border: #f3e0a0;
+  --vs-notice-accent: #e0a800;
+  --vs-notice-title: #7a5200;
+  --vs-error-bg: #fdd;
+  --vs-error-border: #f00;
+  /* The element a link jumped to: a shade darker than the background. */
+  --vs-target: #ebebeb;
+  --vs-tok-comment: #6a737d;
+  --vs-tok-string: #22863a;
+  --vs-tok-field: #005cc5;
+  --vs-tok-enum: #6f42c1;
+  --vs-tok-number: #b35900;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --vs-text: #e3e3e3;
+    --vs-muted: #a2a6ab;
+    --vs-border: #3a3a40;
+    --vs-bg: #131315;
+    --vs-surface: #1c1c1f;
+    --vs-shade: #26262a;
+    --vs-accent: #f28b82;
+    --vs-link: #8ab4f8;
+    --vs-warning-bg: rgba(255, 204, 0, 0.14);
+    --vs-warning-border: #a68500;
+    --vs-notice-bg: #262110;
+    --vs-notice-border: #4a3e14;
+    --vs-notice-accent: #c9a227;
+    --vs-notice-title: #f2cf66;
+    --vs-error-bg: #4a1d1d;
+    --vs-error-border: #c62828;
+    --vs-target: #26262a;
+    --vs-tok-comment: #8b949e;
+    --vs-tok-string: #7ee787;
+    --vs-tok-field: #79c0ff;
+    --vs-tok-enum: #d2a8ff;
+    --vs-tok-number: #ffa657;
+  }
+}
+
+body {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 0 20px;
+  background-color: var(--vs-bg);
+  color: var(--vs-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 {
+  border-bottom: 1px solid var(--vs-border);
+  padding-bottom: 5px;
+}
+
+.warning-box {
+  background-color: var(--vs-warning-bg);
+  border: 1px solid var(--vs-warning-border);
+  padding: 10px;
+  margin: 10px 0;
+  margin-bottom: 20px;
+}
+
+code {
+  background-color: var(--vs-bg);
+  border: 1px solid var(--vs-border);
+  border-radius: 3px;
+}
+
+pre {
+  background-color: var(--vs-bg);
+  border: 1px solid var(--vs-border);
+  border-radius: 6px;
+  padding: 0.75em 1em;
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.45;
+}
+
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.tok-comment {
+  color: var(--vs-tok-comment);
+  font-style: italic;
+}
+
+.tok-string {
+  color: var(--vs-tok-string);
+}
+
+.tok-field {
+  color: var(--vs-tok-field);
+}
+
+.tok-enum {
+  color: var(--vs-tok-enum);
+}
+
+.tok-number {
+  color: var(--vs-tok-number);
+}
+
+.header-anchor {
+  /* No underline and color */
+  text-decoration: none;
+  color: inherit;
+}
+
+/* '#' sign after on hover */
+.header-anchor:hover::after {
+  content: "#";
+  padding-left: 5px;
+  color: #aaa;
+}
+
+/* When jumping to an anchor, mark it with a shade. The shadow extends it
+   past the text without moving the layout. Not <main>, the skip link's
+   target. */
+:target:not(main) {
+  background-color: var(--vs-target);
+  box-shadow: 0 0 0 6px var(--vs-target);
+  border-radius: 2px;
+  /* Room above it for the shade (the blog's headings ask for more). */
+  scroll-margin-top: 12px;
+}
+
+/* Headings take focus when jumped to (tabindex="-1"); the shade marks them
+   already, without the focus ring around them. */
+[tabindex="-1"]:target:focus {
+  outline: none;
+}
+
+/* top-left fixed-position floating environment indicator box */
+.env-indicator {
+  position: fixed;
+  background-color: var(--vs-surface);
+  opacity: 0.5;
+  top: 15px;
+  left: 15px;
+  border: 5px solid;
+  padding: 5px;
+  font-size: 16px;
+  z-index: 100;
+  text-transform: uppercase;
+  font-weight: bold;
+}
+
+.env-indicator-development {
+  border-color: lime;
+}
+
+.env-indicator-staging {
+  border-color: orange;
+}

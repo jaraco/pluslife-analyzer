@@ -4,23 +4,45 @@ Offline mirror of the virus.sucks Pluslife Analyzer web app
 Purpose : Archival snapshot / insurance for jaraco/pluslife-analyzer issue #3,
           in case virus.sucks becomes unavailable. Not wired into the app.
 Source  : https://virus.sucks/pluslife_app/
-Captured: 2026-08-08 (UTC)
-App ver : main (e9ef82a0)  [embedded in _js/main.js]
-License : MPL-2.0 — "Lucentia gGmbH and contributors" (per /sw.js header).
-          MPL-2.0 permits redistribution provided license notices are kept.
+Captured: 2026-10-31 (UTC)
+App ver : production (8483710a)  [footer of pluslife_app/index.html]
+License : MPL-2.0 — "Lucentia gGmbH and contributors", as recorded in the
+          2026-08-08 snapshot of /sw.js. NOTE: the current build is minified
+          and carries no SPDX header or copyright notice in any mirrored file;
+          the earlier snapshot on this branch is the documented license basis.
+          Lucentia gGmbH is still named as the site's operator (/imprint/).
 Contact : hi@virus.sucks
 
 Contents mirror the site's path layout under virus.sucks/. The file set is the
-service worker's precache list (/sw.js urlsToCache) plus manifest.json and sw.js:
+service worker's precache manifest plus sw.js itself. Upstream has moved to
+Workbox, so that list is now the {"revision","url"} manifest embedded in
+/sw.js, which replaced the hand-written urlsToCache array; manifest.json is a
+member of it and no longer needs fetching separately. 30 precached URLs:
 
-  virus.sucks/pluslife_app/index.html        (the app page)
+  virus.sucks/pluslife_app/index.html        (the app page; served as /pluslife_app/)
   virus.sucks/pluslife_app/manifest.json
   virus.sucks/sw.js
   virus.sucks/_js/main.js
   virus.sucks/_js/pluslife_app.js            (full device protocol + analysis)
+  virus.sucks/_js/site_lang.js
+  virus.sucks/minimal.css, site.css, app_outer.css
+  virus.sucks/assets/shoelace-light.css, assets/shoelace-dark.css
+  virus.sucks/assets/icons/*.svg             (17 icons)
   virus.sucks/pluslife/power.webp
+  virus.sucks/ivv-inscription.svg
   virus.sucks/favicon.ico
-  virus.sucks/assets/icons/*.svg
+
+Changes since 2026-08-08, as the page's own changelog describes them: the app
+page no longer inlines the app (it loads /_js/*.js and site stylesheets), the
+site is bilingual (en/de) and follows system dark mode, test share links and
+optional test metadata were added, expert-mode curves can be normalized/raw/
+per-channel, PM003, PM003 Ultra, PM005 and PM001 Ultra devices are supported,
+PM001 curve data now survives a reconnect or restart, and the app refuses to
+connect to one device from several tabs.
+
+Verification: every mirrored file's MD5 matches the revision recorded for it in
+the site's own precache manifest in sw.js, so the set is internally consistent
+with the release it came from. SHA-256 checksums in checksums.sha256.
 
 To serve later (paths are site-absolute, so file:// won't work directly — use a
 static server rooted at virus.sucks/):
@@ -28,5 +50,3 @@ static server rooted at virus.sucks/):
   cd virus.sucks && python3 -m http.server 8080
   # then open http://localhost:8080/pluslife_app/
   # or point the app at it: PLUSLIFE_URL=http://localhost:8080/pluslife_app/
-
-SHA-256 checksums (see checksums.sha256).

@@ -1,0 +1,896 @@
+/* The site's layout: header, navigation, footer, and the blog. Loaded after
+   minimal.css, which styles the content (and the dev pages under Vite) and
+   defines the colours (--vs-*). */
+
+:root {
+  --measure: 840px;
+  --wide: 960px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  /* Short and long pages center the same, so the header stays put. */
+  scrollbar-gutter: stable;
+}
+
+body {
+  /* minimal.css narrows the body; here the main column does. */
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--vs-bg);
+  color: var(--vs-text);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--vs-link);
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* In the dark, the black inscription turns white, and the content's images
+   keep the white they were drawn on: diagrams with transparent backgrounds
+   would vanish otherwise. Photos and screenshots are opaque anyway. */
+@media (prefers-color-scheme: dark) {
+  .brand-inscription {
+    filter: invert(1);
+  }
+
+  main img {
+    background: #fff;
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  padding: 8px 12px;
+  background: var(--vs-surface);
+  z-index: 10;
+}
+
+.skip-link:focus {
+  left: 8px;
+  top: 8px;
+}
+
+/* Header */
+
+.site-header {
+  background: var(--vs-surface);
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.site-header-inner {
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: 10px 20px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  grid-template-areas: "brand nav lang";
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.brand {
+  grid-area: brand;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 1.25rem;
+  letter-spacing: -0.01em;
+}
+
+.brand-inscription {
+  margin-top: 4px;
+  opacity: 0.75;
+}
+
+.site-nav {
+  grid-area: nav;
+  justify-self: end;
+}
+
+.lang-switch {
+  grid-area: lang;
+  border-left: 1px solid var(--vs-border);
+  padding-left: 12px;
+}
+
+.site-nav ul,
+.lang-switch ul {
+  display: flex;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.site-nav a,
+.lang-switch a,
+.lang-switch span,
+.lang-switch button {
+  display: block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: var(--vs-text);
+  text-decoration: none;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.site-nav a:hover,
+.lang-switch a:hover,
+.lang-switch button:hover {
+  background: var(--vs-bg);
+}
+
+/* No bolder weight: the wider text would move the items after it. */
+.site-nav a[aria-current="page"] {
+  color: var(--vs-accent);
+  box-shadow: inset 0 -2px 0 var(--vs-accent);
+  border-radius: 6px 6px 0 0;
+}
+
+.lang-switch button {
+  border: none;
+  background: none;
+  font-family: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+
+.lang-switch a,
+.lang-switch span,
+.lang-switch button {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.lang-switch a,
+.lang-switch button {
+  color: var(--vs-muted);
+}
+
+/* The current language: on bilingual pages, <html lang> is the site's
+   language (site_lang.js sets it before the page renders). */
+.lang-switch span[aria-current],
+html[lang="en"] .lang-switch button[data-site-lang="en"],
+html[lang="de"] .lang-switch button[data-site-lang="de"] {
+  background: var(--vs-text);
+  color: var(--vs-surface);
+  cursor: default;
+}
+
+/* Bilingual pages carry both languages; only the current one shows: the
+   header's and footer's variants, those of the page's own text (class
+   i18n-variant, lang="..."), and <lang-switch>'s blocks (also before the
+   element is defined). */
+html[data-bilingual][lang="en"] .i18n-variant:not([lang="en"]),
+html[data-bilingual][lang="de"] .i18n-variant:not([lang="de"]),
+html[data-bilingual][lang="en"] lang-switch > [lang]:not([lang="en"]),
+html[data-bilingual][lang="de"] lang-switch > [lang]:not([lang="de"]) {
+  display: none;
+}
+
+/* Narrow screens: brand and language on top, the nav below it, scrolling
+   sideways rather than wrapping. */
+@media (max-width: 640px) {
+  .site-header-inner {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      "brand lang"
+      "nav nav";
+    padding: 10px 12px 0;
+  }
+  .site-nav {
+    justify-self: stretch;
+    margin: 0 -12px;
+    overflow-x: auto;
+    border-top: 1px solid var(--vs-bg);
+  }
+  .site-nav ul {
+    padding: 0 6px;
+  }
+  .lang-switch {
+    border-left: none;
+    padding-left: 0;
+  }
+}
+
+/* Main column */
+
+/* The page's title (or, without one, its content) starts as far below the
+   header as a section's heading below the section before it. */
+main {
+  flex: 1;
+  width: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: 32px 20px 40px;
+}
+
+@media (max-width: 640px) {
+  main {
+    padding-top: 24px;
+  }
+}
+
+/* Headings: smaller and lighter than the browser's, and closer to the text
+   they head than to the text before them. */
+h1,
+h2,
+h3,
+h4 {
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* The title is the page's first line, or follows the breadcrumb; the
+   content follows it a little further than a paragraph its predecessor. */
+h1 {
+  margin: 0 0 20px;
+  border-bottom: 1px solid var(--vs-border);
+  padding-bottom: 5px;
+  font-size: 1.75rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+@media (max-width: 640px) {
+  h1 {
+    font-size: 1.5rem;
+  }
+}
+
+h2 {
+  margin: 1.6em 0 0.5em;
+  font-size: 1.4rem;
+}
+
+h3 {
+  margin: 1.4em 0 0.4em;
+  font-size: 1.15rem;
+}
+
+h4 {
+  margin: 1.3em 0 0.3em;
+  font-size: 1rem;
+}
+
+.lede {
+  color: var(--vs-muted);
+  font-size: 1.1rem;
+}
+
+.breadcrumb {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+}
+
+.breadcrumb a {
+  color: var(--vs-muted);
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+/* Blog */
+
+.post-header h1 {
+  margin: 0 0 8px;
+}
+
+.post-meta {
+  margin: 0;
+  color: var(--vs-muted);
+  font-size: 0.9rem;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tags a {
+  display: inline-block;
+  padding: 1px 10px;
+  border: 1px solid var(--vs-border);
+  border-radius: 999px;
+  background: var(--vs-surface);
+  color: var(--vs-muted);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.tags a:hover {
+  border-color: var(--vs-muted);
+  color: var(--vs-text);
+}
+
+.tags .count {
+  margin-left: 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--vs-bg);
+  font-size: 0.75rem;
+}
+
+.post-list {
+  margin: 24px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.post-summary {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.post-summary:first-child {
+  padding-top: 0;
+}
+
+.post-summary h2 {
+  margin: 0 0 4px;
+  font-size: 1.3rem;
+  line-height: 1.3;
+}
+
+.post-summary h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.post-summary h2 a:hover {
+  color: var(--vs-link);
+  text-decoration: underline;
+}
+
+.post-summary p {
+  margin: 6px 0 0;
+}
+
+/* The thumbnail on the right, so that every title starts at the left. */
+.post-summary.with-thumbnail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 200px;
+  gap: 24px;
+  align-items: start;
+}
+
+.post-thumbnail img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.post-thumbnail:hover img {
+  border-color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .post-summary.with-thumbnail {
+    grid-template-columns: minmax(0, 1fr) 96px;
+    gap: 14px;
+  }
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 8px;
+  border-radius: 4px;
+  background: #e8eaed;
+  font-size: 0.75rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge {
+    background: var(--vs-shade);
+  }
+}
+
+.tag-cloud h2 {
+  font-size: 1rem;
+  color: var(--vs-muted);
+}
+
+.tag-index {
+  padding-left: 1.2em;
+}
+
+.tag-index .count {
+  color: var(--vs-muted);
+  font-size: 0.9rem;
+}
+
+.post-body {
+  margin-top: 20px;
+}
+
+/* As much space between list items as the FAQ's loose lists get from their
+   paragraphs' margins. */
+.post-body li + li {
+  margin-top: 1em;
+}
+
+/* The text of a post, or of a page with `toc` (pages.ts): what a table of
+   contents stays beside. A link to a heading (such as the table's) puts it
+   level with the sticky table below. */
+.toc-scope :is(h2, h3) {
+  scroll-margin-top: 24px;
+}
+
+/* A table of contents (site/src/toc.ts): in the margin right of the text,
+   sticky; the rail spans the text, so the table stops at the text's end. Only
+   where the viewport has room for it beside the main column: its 840px, and
+   on each side 20px past its padding, the table's 200px, and 24px to spare,
+   plus a scrollbar. Wider viewports widen the table, up to 320px, so long
+   headings wrap less. */
+
+.toc-rail {
+  display: none;
+}
+
+@media (min-width: 1360px) {
+  .toc-scope {
+    position: relative;
+  }
+
+  .toc-rail {
+    display: block;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(100% + 40px);
+    width: clamp(200px, (100vw - var(--measure)) / 2 - 64px, 320px);
+  }
+}
+
+.toc {
+  position: sticky;
+  top: 24px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  /* A long table scrolls with the wheel, and _js/toc.ts keeps the current
+     section in view, but shows no scrollbar beside the text. */
+  scrollbar-width: none;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  overflow-wrap: break-word;
+}
+
+.toc-title {
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+
+.toc ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toc > ol {
+  border-left: 1px solid var(--vs-border);
+}
+
+/* The current section's bar (_js/toc.ts) covers the list's border. */
+.toc a {
+  display: block;
+  margin-left: -1px;
+  padding: 3px 0 3px 12px;
+  border-left: 2px solid transparent;
+  color: var(--vs-muted);
+  text-decoration: none;
+}
+
+.toc ol ol a {
+  padding-left: 24px;
+}
+
+.toc a:hover {
+  color: var(--vs-text);
+}
+
+.toc a[aria-current] {
+  border-left-color: var(--vs-accent);
+  color: var(--vs-text);
+}
+
+/* Home page */
+
+.home-links {
+  margin: 0 0 40px;
+  padding: 0;
+  list-style: none;
+}
+
+.home-links li {
+  padding: 16px 0;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.home-links li:first-child {
+  padding-top: 0;
+}
+
+.home-links h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  line-height: 1.3;
+  border: none;
+}
+
+.home-links h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.home-links h2 a:hover {
+  color: var(--vs-link);
+  text-decoration: underline;
+}
+
+.home-links p {
+  margin: 4px 0 0;
+  color: var(--vs-muted);
+}
+
+/* An entry that is one link as a whole (class home-card): its heading's link
+   covers the entry, so a click anywhere in it follows the link, and hovering
+   or focusing it marks the heading. Entries with links of their own (such as
+   the FAQ's languages) can't be one. */
+.home-card {
+  position: relative;
+}
+
+.home-card h2 a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.home-card h2 a:focus-visible {
+  outline: none;
+  color: var(--vs-link);
+  text-decoration: underline;
+}
+
+.home-card:has(h2 a:focus-visible) {
+  outline: 2px solid var(--vs-link);
+  outline-offset: 4px;
+  border-radius: 4px;
+}
+
+.home-section {
+  margin: 0;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--vs-border);
+  color: var(--vs-muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* The newest posts (recent-posts.html, on the home page). */
+
+.recent-posts {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent-posts li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 2px 16px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--vs-border);
+}
+
+.recent-posts time {
+  color: var(--vs-muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.recent-posts-more {
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: right;
+}
+
+.recent-posts-more a {
+  text-decoration: none;
+}
+
+.recent-posts-more a:hover {
+  text-decoration: underline;
+}
+
+/* Post content (more in minimal.css) */
+
+/* A notice to read first (the FAQ's disclaimer): a title with a warning
+   sign, a bold lead, a tight list, and fine print. Its first and last
+   elements don't add their margins to its padding. */
+.notice {
+  margin: 16px 0 28px;
+  padding: 16px 20px;
+  background: var(--vs-notice-bg);
+  border: 1px solid var(--vs-notice-border);
+  border-left: 4px solid var(--vs-notice-accent);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  line-height: 1.55;
+}
+
+.notice p {
+  margin: 0.6em 0;
+}
+
+.notice > :first-child {
+  margin-top: 0;
+}
+
+.notice > :last-child {
+  margin-bottom: 0;
+}
+
+.notice-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vs-notice-title);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.notice-title::before {
+  content: "";
+  flex: none;
+  width: 18px;
+  height: 18px;
+  background: var(--vs-notice-accent);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 2 1 21h22L12 2zm-1 7h2v6h-2V9zm0 8h2v2h-2v-2z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
+}
+
+.notice ul {
+  margin: 0.6em 0;
+  padding-left: 1.3em;
+}
+
+.notice li + li {
+  margin-top: 0.3em;
+}
+
+.notice-fine {
+  padding-top: 0.6em;
+  border-top: 1px solid var(--vs-notice-border);
+  color: var(--vs-muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+th,
+td {
+  border: 1px solid var(--vs-border);
+  padding: 4px 8px;
+}
+
+/* Figures (site/src/markdown.ts): an image, centered, linked to itself,
+   and its caption. On phones, images take the column's width, whatever width
+   the page gave them. */
+
+figure {
+  margin: 1.5em 0;
+  text-align: center;
+}
+
+figure img {
+  vertical-align: middle;
+}
+
+figcaption {
+  margin-top: 8px;
+  color: var(--vs-muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+a.lightbox {
+  cursor: zoom-in;
+}
+
+a.lightbox:focus-visible {
+  outline: none;
+}
+
+a.lightbox:focus-visible img {
+  outline: 2px solid var(--vs-link);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  figure img {
+    width: 100% !important;
+  }
+}
+
+/* The lightbox (_js/lightbox.ts): the image as large as the viewport allows,
+   over a dark backdrop, the same in any color scheme. */
+
+html:has(.lightbox-dialog[open]) {
+  overflow: hidden;
+}
+
+.lightbox-dialog {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  height: 100dvh;
+  max-height: none;
+  margin: 0;
+  padding: 16px;
+  border: none;
+  background: transparent;
+  cursor: zoom-out;
+}
+
+.lightbox-dialog[open] {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.lightbox-dialog::backdrop {
+  background: rgb(0 0 0 / 0.92);
+}
+
+.lightbox-dialog img {
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  background: #fff;
+}
+
+.lightbox-caption {
+  flex-shrink: 0;
+  max-width: 70ch;
+  margin: 0;
+  color: #eee;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  text-align: center;
+}
+
+.lightbox-caption a {
+  color: inherit;
+}
+
+.lightbox-close {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgb(255 255 255 / 0.15);
+  color: #fff;
+  font: inherit;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.lightbox-close:hover {
+  background: rgb(255 255 255 / 0.3);
+}
+
+.lightbox-close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* Footer */
+
+.site-footer {
+  border-top: 1px solid var(--vs-border);
+  background: var(--vs-surface);
+  color: var(--vs-muted);
+  font-size: 0.875rem;
+}
+
+.site-footer > * {
+  max-width: var(--measure);
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 20px;
+}
+
+.site-footer p:first-child {
+  margin-top: 16px;
+  font-style: italic;
+}
+
+.footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.footer-links a {
+  color: var(--vs-muted);
+}
+
+/* minimal.css puts it top left, over the logo. */
+.env-indicator {
+  top: auto;
+  bottom: 15px;
+}

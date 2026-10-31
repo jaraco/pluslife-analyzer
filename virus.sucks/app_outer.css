@@ -1,0 +1,18 @@
+ul {
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-right: 1em;
+}
+
+/* too much space inside the expando, TODO upstream? */
+sl-details::part(content) {
+  --sl-spacing-medium: 0;
+}
+
+/* red error box */
+.error {
+  background-color: var(--vs-error-bg);
+  border: 1px solid var(--vs-error-border);
+  padding: 1em;
+  margin-bottom: 1em;
+}
